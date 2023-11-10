@@ -1,6 +1,5 @@
 import discord
 import json
-from discord.ext import commands
 import random
 import os
 import re
@@ -9,8 +8,10 @@ import uuid
 import time
 import string
 import json
-from websockets.sync.client import connect
 import asyncio
+from pydub import AudioSegment
+from websockets.sync.client import connect
+from discord.ext import commands
 
 SPONGE_BOB_GENERATION_MAX_TRYS = 3
 
@@ -26,23 +27,13 @@ CHARMODELS = {
     "sandy": "TM:eaachm5yecgz",
     "mr. krabs": "TM:ade4ta7rc720",
     "squidwart": "TM:4e2xqpwqaggr"
-    }
-from pydub import AudioSegment
+}
 
 def merge_wav_with_music(folder_path, music_file_path, output_file_path):
-    # Load the music file
     music = AudioSegment.from_file(music_file_path)
-
-    # Increase the volume of the music by 10%
     music = music + 3
-
-    # Adjust the volume of the music by 60%
     music = music - 20
-
-    # Initialize an empty audio segment to store the merged audio
     merged_audio = AudioSegment.silent(duration=0)
-
-    # Iterate over the files in the folder
     num_files = 0
     for filename in os.listdir(folder_path):
         num_files+=1
@@ -51,20 +42,14 @@ def merge_wav_with_music(folder_path, music_file_path, output_file_path):
         if filename.endswith(".wav"):
             file_path = os.path.join(folder_path, filename)
             audio = AudioSegment.from_file(file_path)
-
-            # Add the current audio segment and a 1-second pause to the merged audio
             merged_audio += audio + AudioSegment.silent(duration=1000)
-
-    # Overlay the music onto the merged audio
     merged_audio = merged_audio.overlay(music)
-
-    # Export the final merged audio to a file
     merged_audio.export(output_file_path, format="wav")
-def generate_speech(char, text_to_speak):
+    
+def generate_speech(char, text_to_speak, charmodels):
     wav_storage_server = "https://storage.googleapis.com/vocodes-public"
     uu_id = uuid.uuid4()
-    global CHARMODELS
-    modelname = CHARMODELS[char]
+    modelname = charmodels[char]
     url = 'https://api.fakeyou.com/tts/inference'
     headers = {
     'Accept': 'application/json',
@@ -185,7 +170,7 @@ async def on_message(message):
             i+=1
             char = char_text_pair[0]
             text = char_text_pair[1]
-            audio_file = generate_speech(char, text)
+            audio_file = generate_speech(char, text, CHARMODELS)
             with open("temp/"+audio_temp_identifier+"/"+str(i)+".wav", "wb") as file:
                 file.write(audio_file)
         merge_wav_with_music("temp/"+audio_temp_identifier, "closing.mp3", "temp/"+audio_temp_identifier+"/final.mp3")
