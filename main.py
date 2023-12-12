@@ -28,7 +28,10 @@ CHARMODELS = {
     "mr. krabs": "TM:ade4ta7rc720",
     "squidwart": "TM:4e2xqpwqaggr"
 }
-
+def generate_random_string():
+    characters = string.ascii_lowercase + string.digits
+    random_string = ''.join(random.choices(characters, k=11))
+    return random_string
 def merge_wav_with_music(folder_path, music_file_path, output_file_path):
     music = AudioSegment.from_file(music_file_path)
     music = music + 3
@@ -77,10 +80,8 @@ def generate_speech(char, text_to_speak, charmodels):
            raise Exception("TTS Failed!")
     filepath = response['state']['maybe_public_bucket_wav_audio_path']
     return requests.get(wav_storage_server+filepath).content
-def generate_random_string():
-    characters = string.ascii_lowercase + string.digits
-    random_string = ''.join(random.choices(characters, k=11))
-    return random_string
+
+
 def extract_dialogue(string):
     dialogue_list = []
     pattern = r"(\b[A-Z][a-zA-Z]+\b): (.+)"
@@ -98,26 +99,29 @@ async def on_ready():
         os.mkdir("temp")
         
 def mosaicml_mpt_30b_chat_inference(prompt, shash):
-    with connect("wss://mosaicml-mpt-30b-chat.hf.space/queue/join") as websocket:
-        print("connected to ws")
-        websocket.send('{"fn_index":1,"session_hash":"'+shash+'"}')
-        while True:
-            message = websocket.recv()
-            if "send_data" in message:
-                print("send_data")
-                break
-        websocket.send('{"data":["A conversation between a user and an LLM-based AI assistant. The assistant gives helpful and honest answers.",[["'+prompt+'",""]]],"event_data":null,"fn_index":3,"session_hash":"'+shash+'"}')
-        print('{"data":["A conversation between a user and an LLM-based AI assistant. The assistant gives helpful and honest answers.",[["'+prompt+'",""]]],"event_data":null,"fn_index":3,"session_hash":"'+shash+'"}')
-        while True:
-            print("recv")
-            message = websocket.recv()
-            print(message)
-            if "process_completed" in message:
-                print("proc complete")
-                break
-        message = json.loads(message)
-        print("done")
-        return message['output']['data'][1][0][1]
+    endpoint = 'https://api.together.xyz/inference'
+    res = requests.post(endpoint, json={
+    "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+    "max_tokens": 512,
+    "prompt": prompt,
+    "request_type": "language-model-inference",
+    "temperature": 0.7,
+    "top_p": 0.7,
+    "top_k": 50,
+    "repetition_penalty": 1,
+    "stop": [
+        "</s>",
+        "[INST]"
+    ],
+    "negative_prompt": "",
+    "sessionKey": "    ",
+    "prompt_format_string": "[INST]  {prompt}\n [/INST]",
+    "repetitive_penalty": 1
+    }, headers={
+    "Authorization": "          ",
+    })
+
+    return json.loads(res.text)["output"]["choices"][0]["text"]
     
 def charstring(chars):
     final = ""
@@ -125,42 +129,25 @@ def charstring(chars):
         final+=" and "
         final+=char
     return final
+    
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
         return
-    if message.content.lower().startswith("chatmbt:"):
-        await message.channel.send(mosaicml_mpt_30b_chat_inference(" ".join(message.content.split(" ")[1:])))
     if message.content.lower().startswith('spongebob:'):
+        shash = 0
         if "/" in message.content: 
            newchars = message.content.split("/")[1]
            drecks = message.content.split("/")[0]
         else:
            drecks = message.content
         if "/" in message.content:
-           prompt = "Write a conversation between spongebob and patrick"+charstring(newchars.split(","))+". The topic is: "+" ".join(drecks.split(" ")[1:])+'. End your conversation with Patrick just saying "The End"'
+           prompt = "Write a conversation between spongebob and patrick"+charstring(newchars.split(","))+". The topic is: "+" ".join(drecks.split(" ")[1:])
         else:
-            prompt = "Write a conversation between spongebob and patrick. The topic is: "+" ".join(drecks.split(" ")[1:])+'. End your conversation with Patrick just saying "The End"'
-        responses = []
-        max_parts = 5
-        shash = generate_random_string()
-        part = 1
-        while True:
-            if max_parts == 0:
-                break
-            print(f"part {part}")
-            response_temp = mosaicml_mpt_30b_chat_inference(prompt, shash)
-            responses+=response_temp
-            part+=1
-            if not "the end" in response_temp.lower():
-                prompt="continue"
-                max_parts-=1
-                continue
-            else:
-                break
-        print(responses)
-        input("")
-        response = extract_dialogue(response_temp)
+            prompt = "Write a conversation between spongebob and patrick. The topic is: "+" ".join(drecks.split(" ")[1:])
+        response_unprc = mosaicml_mpt_30b_chat_inference(prompt, shash)
+        print(response_unprc)
+        response = extract_dialogue(response_unprc)
         audio_temp_identifier = generate_random_string()
         if not os.path.isdir("temp/"+audio_temp_identifier):
             os.mkdir("temp/"+audio_temp_identifier)
@@ -170,7 +157,12 @@ async def on_message(message):
             i+=1
             char = char_text_pair[0]
             text = char_text_pair[1]
-            audio_file = generate_speech(char, text, CHARMODELS)
+            while True:
+                try:
+                    audio_file = generate_speech(char, text, CHARMODELS)
+                    break
+                except:
+                    continue
             with open("temp/"+audio_temp_identifier+"/"+str(i)+".wav", "wb") as file:
                 file.write(audio_file)
         merge_wav_with_music("temp/"+audio_temp_identifier, "closing.mp3", "temp/"+audio_temp_identifier+"/final.mp3")
@@ -178,4 +170,6 @@ async def on_message(message):
            audio_file = discord.File(f)
            await message.channel.send(file=audio_file)
 bot.run("TOKEN")  # Replace with your own bot token
+
+
 
