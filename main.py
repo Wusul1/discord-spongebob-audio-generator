@@ -127,7 +127,8 @@ async def on_message(message):
            drecks = message.content
            
         if "/" in message.content:
-           prompt = "Write a conversation between spongebob and patrick"+charstring(newchars.split(","))+". The topic is: "+" ".join(drecks.split(" ")[1:])
+           characters = await charstring(newchars.split(","))
+           prompt = "Write a conversation between spongebob and patrick"+characters+". The topic is: "+" ".join(drecks.split(" ")[1:])
         else:
             prompt = "Write a conversation between spongebob and patrick. The topic is: "+" ".join(drecks.split(" ")[1:])
         await message.channel.send("Schreibe script...")
