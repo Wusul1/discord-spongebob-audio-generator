@@ -21,7 +21,10 @@ CHARMODELS = {
     "patrick": "TM:ptcaavcfhwxd",
     "sandy": "TM:eaachm5yecgz",
     "mr. krabs": "TM:ade4ta7rc720",
-    "squidwart": "TM:4e2xqpwqaggr"
+    "squidwart": "TM:4e2xqpwqaggr",
+    "wheatley" : "weight_vtzgg9bn7gx4dp7wkxp6cgxmp",
+    "glados" : "weight_q7g0yw69sha8dgh732p58r1kk",
+    "cave johnson" : "weight_49nz6hrsj9x67szmf88frhhav"
 }
 
 async def merge_wav_with_music(folder_path, music_file_path, output_file_path):
@@ -127,8 +130,15 @@ async def on_message(message):
            drecks = message.content
            
         if "/" in message.content:
+           custome = False
+           if "#custom" in newchars:
+               custom=True
+               newchars=newchars.replace("#custom", "")
            characters = await charstring(newchars.split(","))
-           prompt = "Write a conversation between spongebob and patrick"+characters+". The topic is: "+" ".join(drecks.split(" ")[1:])
+           if custom:
+               prompt = "Write a conversation between "+characters+". The topic is: "+" ".join(drecks.split(" ")[1:])
+           else:
+               prompt = "Write a conversation between spongebob and patrick"+characters+". The topic is: "+" ".join(drecks.split(" ")[1:])
         else:
             prompt = "Write a conversation between spongebob and patrick. The topic is: "+" ".join(drecks.split(" ")[1:])
         await message.channel.send("Schreibe script...")
