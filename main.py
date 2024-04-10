@@ -79,7 +79,7 @@ async def generate_speech(char, text_to_speak, charmodels):
 
 async def extract_dialogue(string):
     dialogue_list = []
-    pattern = r"(\b[A-Z][a-zA-Z]+\b): (.+)"
+    pattern = r"(\b[A-Z][a-zA-Z\s]+\b): (.+)"  # Updated pattern to allow spaces
     matches = re.findall(pattern, string)
     for match in matches:
         character = match[0].lower()
