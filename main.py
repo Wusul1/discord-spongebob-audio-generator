@@ -7,20 +7,15 @@ import requests
 import uuid
 import time
 import string
-import json
 import asyncio
 from pydub import AudioSegment
+import websockets
 from websockets.sync.client import connect
 from discord.ext import commands
 
-SPONGE_BOB_GENERATION_MAX_TRYS = 3
+intents = discord.Intents.all()
+bot = discord.Client(intents=intents)
 
-intents = discord.Intents.default()
-intents.typing = False
-intents.message_content = True
-intents.presences = False
-
-bot = commands.Bot(command_prefix='', intents=intents)
 CHARMODELS = {
     "spongebob": "TM:4hy6m7f7zeny",
     "patrick": "TM:ptcaavcfhwxd",
@@ -28,17 +23,14 @@ CHARMODELS = {
     "mr. krabs": "TM:ade4ta7rc720",
     "squidwart": "TM:4e2xqpwqaggr"
 }
-def generate_random_string():
-    characters = string.ascii_lowercase + string.digits
-    random_string = ''.join(random.choices(characters, k=11))
-    return random_string
-def merge_wav_with_music(folder_path, music_file_path, output_file_path):
+
+async def merge_wav_with_music(folder_path, music_file_path, output_file_path):
     music = AudioSegment.from_file(music_file_path)
-    music = music + 3
-    music = music - 20
+    music = music+3
+    music = music-20
     merged_audio = AudioSegment.silent(duration=0)
     num_files = 0
-    for filename in os.listdir(folder_path):
+    for file in os.listdir(folder_path):
         num_files+=1
     for i in range(1,num_files+1):
         filename=str(i)+".wav"
@@ -49,7 +41,7 @@ def merge_wav_with_music(folder_path, music_file_path, output_file_path):
     merged_audio = merged_audio.overlay(music)
     merged_audio.export(output_file_path, format="wav")
     
-def generate_speech(char, text_to_speak, charmodels):
+async def generate_speech(char, text_to_speak, charmodels):
     wav_storage_server = "https://storage.googleapis.com/vocodes-public"
     uu_id = uuid.uuid4()
     modelname = charmodels[char]
@@ -82,7 +74,7 @@ def generate_speech(char, text_to_speak, charmodels):
     return requests.get(wav_storage_server+filepath).content
 
 
-def extract_dialogue(string):
+async def extract_dialogue(string):
     dialogue_list = []
     pattern = r"(\b[A-Z][a-zA-Z]+\b): (.+)"
     matches = re.findall(pattern, string)
@@ -97,79 +89,75 @@ async def on_ready():
     print(f'Logged in as {bot.user.name} ({bot.user.id})')
     if not os.path.isdir("temp"):
         os.mkdir("temp")
-        
-def mosaicml_mpt_30b_chat_inference(prompt, shash):
-    endpoint = 'https://api.together.xyz/inference'
-    res = requests.post(endpoint, json={
-    "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
-    "max_tokens": 512,
-    "prompt": prompt,
-    "request_type": "language-model-inference",
-    "temperature": 0.7,
-    "top_p": 0.7,
-    "top_k": 50,
-    "repetition_penalty": 1,
-    "stop": [
-        "</s>",
-        "[INST]"
-    ],
-    "negative_prompt": "",
-    "sessionKey": "    ",
-    "prompt_format_string": "[INST]  {prompt}\n [/INST]",
-    "repetitive_penalty": 1
-    }, headers={
-    "Authorization": "          ",
-    })
-
-    return json.loads(res.text)["output"]["choices"][0]["text"]
-    
-def charstring(chars):
+async def generate_random_string():
+    characters = string.ascii_letters + string.digits
+    return ''.join(random.choice(characters) for _ in range(50))
+async def charstring(chars):
     final = ""
     for char in chars:
         final+=" and "
         final+=char
     return final
-    
+async def dbrx(prompt):
+    import requests
+    import json
+
+    response = requests.post(
+    url="https://openrouter.ai/api/v1/chat/completions",
+    headers={
+    "Authorization": "KEY",
+    },
+    data=json.dumps({
+    "model": "nousresearch/nous-hermes-2-mixtral-8x7b-dpo", # Optional
+    "messages": [
+      {"role": "user", "content": prompt}
+    ]
+    })
+    )  
+    return json.loads(response.text)["choices"][0]["message"]["content"]
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
         return
-    if message.content.lower().startswith('spongebob:'):
-        shash = 0
+    if message.content.lower().startswith('spongebot:'):
         if "/" in message.content: 
            newchars = message.content.split("/")[1]
            drecks = message.content.split("/")[0]
         else:
            drecks = message.content
+           
         if "/" in message.content:
            prompt = "Write a conversation between spongebob and patrick"+charstring(newchars.split(","))+". The topic is: "+" ".join(drecks.split(" ")[1:])
         else:
             prompt = "Write a conversation between spongebob and patrick. The topic is: "+" ".join(drecks.split(" ")[1:])
-        response_unprc = mosaicml_mpt_30b_chat_inference(prompt, shash)
+        await message.channel.send("Schreibe script...")
+        response_unprc = await dbrx(prompt)
         print(response_unprc)
-        response = extract_dialogue(response_unprc)
-        audio_temp_identifier = generate_random_string()
+        response = await extract_dialogue(response_unprc)
+        audio_temp_identifier = await generate_random_string()
         if not os.path.isdir("temp/"+audio_temp_identifier):
             os.mkdir("temp/"+audio_temp_identifier)
         i=0
+        print(response)
         for char_text_pair in response:
             time.sleep(10)
             i+=1
+            await message.channel.send("Audio-Datei "+str(i)+" wird generiert...")
             char = char_text_pair[0]
             text = char_text_pair[1]
             while True:
                 try:
-                    audio_file = generate_speech(char, text, CHARMODELS)
+                    print("generting audio file")
+                    audio_file = await generate_speech(char, text, CHARMODELS)
                     break
                 except:
                     continue
             with open("temp/"+audio_temp_identifier+"/"+str(i)+".wav", "wb") as file:
                 file.write(audio_file)
-        merge_wav_with_music("temp/"+audio_temp_identifier, "closing.mp3", "temp/"+audio_temp_identifier+"/final.mp3")
+        await message.channel.send("Audio-Dateien werden kombiniert...")
+        await merge_wav_with_music("temp/"+audio_temp_identifier, "closing.mp3", "temp/"+audio_temp_identifier+"/final.mp3")
         with open("temp/"+audio_temp_identifier+"/final.mp3", "rb") as f:
            audio_file = discord.File(f)
            await message.channel.send(file=audio_file)
 bot.run("TOKEN")  # Replace with your own bot token
-
-
-
+#add erzähler
