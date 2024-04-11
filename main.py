@@ -5,7 +5,6 @@ import os
 import re
 import requests
 import uuid
-import time
 import string
 import asyncio
 from pydub import AudioSegment
@@ -62,7 +61,7 @@ async def generate_speech(char, text_to_speak, charmodels):
     response = json.loads(response)
     token = response['inference_job_token']
     while True:
-       time.sleep(1)
+       await asyncio.sleep(1)
        url = 'https://api.fakeyou.com/tts/job/'+token
        headers = {'Accept': 'application/json'}
        response = requests.get(url, headers=headers).text
@@ -151,7 +150,7 @@ async def on_message(message):
         i=0
         print(response)
         for char_text_pair in response:
-            time.sleep(10)
+            await asyncio.sleep(10)
             i+=1
             await message.channel.send("Audio-Datei "+str(i)+" wird generiert...")
             char = char_text_pair[0]
